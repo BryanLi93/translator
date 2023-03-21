@@ -6,9 +6,18 @@ import _ from "lodash";
 import * as os from "os";
 import { default as prompt } from "prompt";
 
-const sourceFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-cn";
-const targetFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-tw";
+// js 项目
+// const sourceFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-cn";
+// const targetFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-tw";
+// const excelFilePath = "/Users/bryan/Documents/ctg/hk/nbs-pc/tools/i18n.xlsx";
+
+// ts 项目
+const sourceFolderPath =
+  "/Users/bryan/Documents/ctg/hk/mbs-web/src/i18n/Language/zh-cn";
+const targetFolderPath =
+  "/Users/bryan/Documents/ctg/hk/mbs-web/src/i18n/Language/zh-tw";
 const excelFilePath = "/Users/bryan/Documents/ctg/hk/nbs-pc/tools/i18n.xlsx";
+
 // prompt.start();
 // const { sourceFolderPath, targetFolderPath, excelFilePath } = await prompt.get({
 //   properties: {
@@ -73,8 +82,6 @@ export function traverseObj(obj, callback, keyChain) {
       callback(newKeyChain, obj[key]);
     }
   });
-  // for (const key in obj) {
-  // }
 }
 
 function isNumber(val) {
@@ -118,28 +125,22 @@ function getDynamicImportConfig(extname) {
 //   `../src/i18n/${rootSourceDirname}`
 // );
 let unTranslateWordsLog = `# 未翻译词条${os.EOL}`;
-
-await traverseFolder(sourceFolderPath, async (filePath) => {
+console.time("递归------");
+traverseFolder(sourceFolderPath, async (sourcePath) => {
   try {
     // console.log(process.cwd(), filePath, path.join(process.cwd(), filePath))
-    const sourcePath = filePath;
-    const sourceExtname = path.extname(sourcePath);
-    const sourceFileName = path.basename(sourcePath);
 
     const relativePath = path.relative(sourceFolderPath, sourcePath);
-
     const targetPath = path.join(targetFolderPath, relativePath);
-    // const targetPath = filePath.replace(rootSourceDirname, rootTargetDirname);
-    const targetExtname = path.extname(targetPath);
-    const targetFileName = path.basename(targetPath);
-    const targetExists = fs.existsSync(targetPath);
     const targetDirname = path.dirname(targetPath);
+    const targetExists = fs.existsSync(targetPath);
+    const extName = path.extname(targetPath);
+    const fileName = path.basename(targetPath);
 
     // 只处理 js、json、ts 文件
-    if (![".js", ".json", ".ts"].includes(sourceExtname)) return;
+    if (![".js", ".json", ".ts"].includes(extName)) return;
     fs.mkdirSync(targetDirname, { recursive: true });
-
-    if (["index.js", "index.ts"].includes(targetFileName)) {
+    if (["index.js", "index.ts"].includes(fileName)) {
       // target 不存在时，复制 source
       if (!targetExists) {
         // 复制 source 的 index.js
@@ -148,20 +149,20 @@ await traverseFolder(sourceFolderPath, async (filePath) => {
     } else {
       const sourceFile = await import(
         sourcePath,
-        getDynamicImportConfig(sourceExtname)
+        getDynamicImportConfig(extName)
       );
       const sourceFileExportObj = sourceFile.default;
       let targetFileExportObj = {};
       if (targetExists) {
         targetFileExportObj = (
-          await import(targetPath, getDynamicImportConfig(targetExtname))
+          await import(targetPath, getDynamicImportConfig(extName))
         ).default;
         // console.log(targetPath, targetFileExportObj)
       }
       unTranslateWordsLog += `${os.EOL}## ${targetPath}${os.EOL}`;
 
       // @ts-ignore
-      traverseObj(sourceFileExportObj, async (keyChain, sourceVal) => {
+      traverseObj(sourceFileExportObj, (keyChain, sourceVal) => {
         const targetVal = _.get(targetFileExportObj, keyChain);
         if (!targetVal) {
           createObjIfKeyIsNumber(targetFileExportObj, keyChain);
@@ -179,11 +180,10 @@ await traverseFolder(sourceFolderPath, async (filePath) => {
       });
       // 创建文件，内容是 targetFileExportObj
       let targetFileExportObjStr =
-        `${JSON.stringify(targetFileExportObj, null, 2)}` + os.EOL;
-      // targetFileExportObjStr += os.EOL // 末尾加空行
+        `${JSON.stringify(targetFileExportObj, null, 2)}` + os.EOL; // 末尾加空行
 
       // js、ts 文件做格式处理，json 用标准格式
-      if ([".js", ".ts"].includes(targetExtname)) {
+      if ([".js", ".ts"].includes(extName)) {
         targetFileExportObjStr = targetFileExportObjStr
           // 清除 key 的双引号
           // .replace(/"([^"]+)":/g, '$1:')
@@ -191,20 +191,27 @@ await traverseFolder(sourceFolderPath, async (filePath) => {
           .replace(/\"/g, "\uFFFF") // U+ FFFF
           .replace(/\uFFFF/g, "'");
       }
-      const fileContent = isJSON(targetExtname)
+      const fileContent = isJSON(extName)
         ? targetFileExportObjStr
         : `export default ${targetFileExportObjStr}`;
 
       fs.writeFileSync(targetPath, fileContent);
     }
-    fs.writeFileSync(
-      path.join(process.cwd(), "noTranslateWords.md"),
-      unTranslateWordsLog
-    );
   } catch (e) {
     console.log(e);
   }
 });
+
+console.timeEnd("递归------");
+console.log(unTranslateWordsLog);
+
+const logDir = path.join(process.cwd(), "/logs");
+fs.mkdirSync(logDir, { recursive: true });
+fs.writeFileSync(
+  // yyyy-mm-dd
+  path.join(logDir, `noTranslatedWords-${new Date().getTime()}.md`),
+  unTranslateWordsLog
+);
 console.log("翻译完成~未翻译词条已记录到 noTranslateWords.md");
 
 // TODO 无翻译词条，直翻繁体
