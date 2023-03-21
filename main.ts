@@ -1,25 +1,24 @@
-import xlsx from "node-xlsx";
-// cjs 模块
-import * as fs from "fs";
-import * as path from "path";
-import _ from "lodash";
-import * as os from "os";
-import { default as prompt } from "prompt";
+const xlsx = require("node-xlsx");
+const fs = require("fs");
+const path = require("path");
+const _ = require("lodash");
+const os = require("os");
+const shellPrompt = require("prompt");
 
 // js 项目
-// const sourceFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-cn";
-// const targetFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-tw";
-// const excelFilePath = "/Users/bryan/Documents/ctg/hk/nbs-pc/tools/i18n.xlsx";
+const sourceFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-cn";
+const targetFolderPath = "/Users/bryan/Documents/ctg/hk/nbs-pc/src/i18n/zh-tw";
+const excelFilePath = "/Users/bryan/Downloads/多语言支持.xlsx";
 
 // ts 项目
-const sourceFolderPath =
-  "/Users/bryan/Documents/ctg/hk/mbs-web/src/i18n/Language/zh-cn";
-const targetFolderPath =
-  "/Users/bryan/Documents/ctg/hk/mbs-web/src/i18n/Language/zh-tw";
-const excelFilePath = "/Users/bryan/Documents/ctg/hk/nbs-pc/tools/i18n.xlsx";
+// const sourceFolderPath =
+//   "/Users/bryan/Documents/ctg/hk/mbs-web/src/i18n/Language/zh-cn";
+// const targetFolderPath =
+//   "/Users/bryan/Documents/ctg/hk/mbs-web/src/i18n/Language/zh-tw";
+// const excelFilePath = "/Users/bryan/Documents/ctg/hk/nbs-pc/tools/i18n.xlsx";
 
-// prompt.start();
-// const { sourceFolderPath, targetFolderPath, excelFilePath } = await prompt.get({
+// shellPrompt.start();
+// const { sourceFolderPath, targetFolderPath, excelFilePath } = await shellPrompt.get({
 //   properties: {
 //     sourceFolderPath: {
 //       description: "请输入参考的文件夹路径",
@@ -55,7 +54,7 @@ const translateTools = Object.fromEntries(KVArr);
  * @param {*} dir
  * @param {*} callback
  */
-export function traverseFolder(dir, callback) {
+function traverseFolder(dir, callback) {
   fs.readdirSync(dir).forEach((file) => {
     const filePath = path.join(dir, file);
     if (fs.statSync(filePath).isDirectory()) {
@@ -73,7 +72,7 @@ export function traverseFolder(dir, callback) {
 // }
 
 // 深度遍历对象，保留 key 的链路
-export function traverseObj(obj, callback, keyChain) {
+function traverseObj(obj, callback, keyChain) {
   Object.keys(obj).forEach((key) => {
     const newKeyChain = keyChain === undefined ? [key] : [...keyChain, key];
     if (typeof obj[key] === "object") {
@@ -118,6 +117,11 @@ function getDynamicImportConfig(extname) {
     : {};
 }
 
+function isFileEmpty(filePath) {
+  const stats = fs.statSync(filePath);
+  return stats.size === 0;
+}
+
 // const rootSourceDirname = "zh-cn";
 // const rootTargetDirname = "zh-tw";
 // const hanldeFolderPath = path.join(
@@ -125,7 +129,6 @@ function getDynamicImportConfig(extname) {
 //   `../src/i18n/${rootSourceDirname}`
 // );
 let unTranslateWordsLog = `# 未翻译词条${os.EOL}`;
-console.time("递归------");
 traverseFolder(sourceFolderPath, async (sourcePath) => {
   try {
     // console.log(process.cwd(), filePath, path.join(process.cwd(), filePath))
@@ -139,6 +142,8 @@ traverseFolder(sourceFolderPath, async (sourcePath) => {
 
     // 只处理 js、json、ts 文件
     if (![".js", ".json", ".ts"].includes(extName)) return;
+    if (isFileEmpty(sourcePath)) return;
+
     fs.mkdirSync(targetDirname, { recursive: true });
     if (["index.js", "index.ts"].includes(fileName)) {
       // target 不存在时，复制 source
@@ -147,16 +152,14 @@ traverseFolder(sourceFolderPath, async (sourcePath) => {
         fs.copyFileSync(sourcePath, targetPath);
       }
     } else {
-      const sourceFile = await import(
-        sourcePath,
-        getDynamicImportConfig(extName)
-      );
-      const sourceFileExportObj = sourceFile.default;
+      const sourceFile = require(sourcePath);
+      const sourceFileExportObj = isJSON(extName)
+        ? sourceFile
+        : sourceFile.default;
       let targetFileExportObj = {};
       if (targetExists) {
-        targetFileExportObj = (
-          await import(targetPath, getDynamicImportConfig(extName))
-        ).default;
+        const targetFile = require(targetPath);
+        targetFileExportObj = isJSON(extName) ? targetFile : targetFile.default;
         // console.log(targetPath, targetFileExportObj)
       }
       unTranslateWordsLog += `${os.EOL}## ${targetPath}${os.EOL}`;
@@ -201,9 +204,6 @@ traverseFolder(sourceFolderPath, async (sourcePath) => {
     console.log(e);
   }
 });
-
-console.timeEnd("递归------");
-console.log(unTranslateWordsLog);
 
 const logDir = path.join(process.cwd(), "/logs");
 fs.mkdirSync(logDir, { recursive: true });

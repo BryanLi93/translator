@@ -1,12 +1,5 @@
 {
     "compilerOptions": {
-        "module": "ESNext",
-        "target": "esnext",
-        "moduleResolution": "node",
-        "allowSyntheticDefaultImports":true,
-        // "esModuleInterop": true, // If you don't want to remove "type": "module" (for example if you're using import statements in your .ts which allows the inference of types from modules), then you can use the following option in tsconfig.json:
-    },
-    "ts-node": {
-        "esm": true
-    },
+        "allowJs": true,
+    }
 }
